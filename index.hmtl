@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Welcome to Henry's EKS NGINX!</title>
+  </head>
+  <body>
+    <h1>🚀 Success! NGINX is running on AWS EKS with ALB</h1>
+    <p>If you see this page, your GitHub Actions pipeline deployed everything correctly. Thank god Henry is in our team</p>
+  </body>
+</html>

@@ -10,6 +10,8 @@ on:
 env:
   CLUSTER_NAME: our-eks-cluster
   AWS_REGION: eu-west-2
+  ECR_REPOSITORY: nginx-app
+  IMAGE_TAG: latest
 
 jobs:
   terraform:
@@ -41,10 +43,40 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: terraform
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Image to ECR
+        run: |
+          IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          echo "Pushing image: $IMAGE_URI"
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI
+          echo "image=$IMAGE_URI" >> $GITHUB_ENV
+
   deploy:
     name: Deploy App to EKS
     runs-on: ubuntu-latest
-    needs: terraform   # waits for Terraform job to finish
+    needs: build
+    outputs:
+      alb_url: ${{ steps.alb.outputs.alb_hostname }}
 
     steps:
       - name: Checkout Code
@@ -58,21 +90,44 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install kubectl
-        uses: actions/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: v1.29.0
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+        run: aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+
+      - name: Update Deployment with New Image
+        run: |
+          kubectl set image deployment/nginx-deployment nginx=${{ env.image }}
 
       - name: Deploy Kubernetes Manifests
         run: |
-          kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml
 
       - name: Verify Deployment
         run: kubectl get pods -o wide
 
-      - name: Verify Ingress
-        run: kubectl get ingress -o wide
+      - name: Get ALB Address
+        id: alb
+        run: |
+          ENDPOINT=$(kubectl get ingress nginx-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "alb_hostname=$ENDPOINT" >> $GITHUB_ENV
+          echo "::set-output name=alb_hostname::$ENDPOINT"
+          echo "### 🌐 ALB DNS Hostname" >> $GITHUB_STEP_SUMMARY
+          echo "\`$ENDPOINT\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Test NGINX endpoint
+        run: |
+          echo "Testing NGINX endpoint at: $alb_hostname"
+          for i in {1..30}; do
+            if curl -s --fail http://$alb_hostname >/dev/null; then
+              echo "✅ NGINX is up and serving traffic!"
+              exit 0
+            fi
+            echo "Retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ NGINX did not become ready in time"
+          exit 1
