@@ -2,9 +2,9 @@ name: Deploy to AWS EKS
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "henrybranch"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "henrybranch"]
   workflow_dispatch:
 
 env:
