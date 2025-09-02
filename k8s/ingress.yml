@@ -9,7 +9,7 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
 spec:
   rules:
-  - host: nginx.example.com   # change or remove if you don’t have DNS
+ # - host: nginx.example.com   # change or remove if you don’t have DNS
     http:
       paths:
       - path: /

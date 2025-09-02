@@ -1,6 +1,6 @@
-# ------------------------------------------------------
+# -------------------------------
 # IAM Policy for AWS Load Balancer Controller
-# ------------------------------------------------------
+# -------------------------------
 data "http" "alb_iam_policy" {
   url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.1/docs/install/iam_policy.json"
 }
@@ -11,17 +11,19 @@ resource "aws_iam_policy" "alb_controller" {
   policy      = data.http.alb_iam_policy.response_body
 }
 
-# ------------------------------------------------------
+# -------------------------------
 # IAM Role for ServiceAccount (IRSA)
-# ------------------------------------------------------
+# -------------------------------
 module "alb_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
   role_name = "${var.cluster_name}-alb-controller"
 
- # attach_alb_controller_policy = false
-  role_policy_arns             = [aws_iam_policy.alb_controller.arn]
+  # Fixed: map of string
+  role_policy_arns = {
+    "alb-controller" = aws_iam_policy.alb_controller.arn
+  }
 
   oidc_providers = {
     main = {
@@ -31,9 +33,9 @@ module "alb_controller_irsa" {
   }
 }
 
-# ------------------------------------------------------
+# -------------------------------
 # Kubernetes Namespace + Service Account
-# ------------------------------------------------------
+# -------------------------------
 resource "kubernetes_namespace" "kube_system" {
   metadata {
     name = "kube-system"
@@ -50,9 +52,9 @@ resource "kubernetes_service_account" "alb_controller" {
   }
 }
 
-# ------------------------------------------------------
+# -------------------------------
 # Install AWS Load Balancer Controller via manifest
-# ------------------------------------------------------
+# -------------------------------
 resource "null_resource" "install_alb_controller" {
   provisioner "local-exec" {
     command = <<EOT
