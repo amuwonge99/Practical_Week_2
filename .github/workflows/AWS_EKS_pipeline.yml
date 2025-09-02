@@ -58,12 +58,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: actions/setup-kubectl@v3
         with:
           version: v1.29.0
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
 
       - name: Deploy Kubernetes Manifests
         run: |
@@ -73,3 +73,6 @@ jobs:
 
       - name: Verify Deployment
         run: kubectl get pods -o wide
+
+      - name: Verify Ingress
+        run: kubectl get ingress -o wide

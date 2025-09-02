@@ -6,9 +6,11 @@ metadata:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
 spec:
   rules:
-  - http:
+  - host: nginx.example.com   # change or remove if you don’t have DNS
+    http:
       paths:
       - path: /
         pathType: Prefix

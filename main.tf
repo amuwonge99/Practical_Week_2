@@ -1,16 +1,10 @@
-#AWS Chosen
-#Managed Kubernetes (EKS)
-#available/scalable (multi-AZ VPC, autoscaling node groups)
-#Internet routing (public + private subnets, NAT gateway)
-#
-
 terraform {
-  
   required_version = ">= 1.3"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0" 
+      version = "~> 5.0"
     }
   }
 }
@@ -19,6 +13,9 @@ provider "aws" {
   region = var.region
 }
 
+# ---------------------------
+# VPC Module
+# ---------------------------
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -38,6 +35,9 @@ module "vpc" {
   }
 }
 
+# ---------------------------
+# EKS Cluster with IRSA
+# ---------------------------
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.0"
@@ -47,6 +47,7 @@ module "eks" {
   subnet_ids      = module.vpc.private_subnets
   vpc_id          = module.vpc.vpc_id
 
+  # Managed node group
   eks_managed_node_groups = {
     default = {
       instance_types = [var.node_instance_type]
@@ -56,20 +57,33 @@ module "eks" {
     }
   }
 
+  # ✅ Enable IRSA
+  enable_irsa = true
+
   tags = {
     Environment = "dev"
     Terraform   = "true"
   }
 }
+
+# ---------------------------
+# ECR Repository
+# ---------------------------
 resource "aws_ecr_repository" "app" {
   name = "your-app-name"
-image_scanning_configuration { 
-  scan_on_push = true 
-  } 
-  tags = { 
-    Environment = "dev" } 
-    }
 
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Environment = "dev"
+  }
+}
+
+# ---------------------------
+# S3 Bucket
+# ---------------------------
 resource "aws_s3_bucket" "app_bucket" {
   bucket = "kfc-bucket-for-henry-to-enjoy"
 

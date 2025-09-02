@@ -5,7 +5,7 @@ metadata:
   labels:
     app: nginx
 spec:
-  type: ClusterIP
+  type: ClusterIP   # stays internal, ALB will target this
   selector:
     app: nginx
   ports:
