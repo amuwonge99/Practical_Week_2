@@ -20,7 +20,7 @@ module "alb_controller_irsa" {
 
   role_name = "${var.cluster_name}-alb-controller"
 
-  attach_alb_controller_policy = false
+ # attach_alb_controller_policy = false
   role_policy_arns             = [aws_iam_policy.alb_controller.arn]
 
   oidc_providers = {
