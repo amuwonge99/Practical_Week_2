@@ -1,4 +1,13 @@
 # -------------------------------
+# Kubernetes provider
+# -------------------------------
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+}
+
+# -------------------------------
 # IAM Policy for AWS Load Balancer Controller
 # -------------------------------
 data "http" "alb_iam_policy" {
@@ -20,7 +29,6 @@ module "alb_controller_irsa" {
 
   role_name = "${var.cluster_name}-alb-controller"
 
-  # Fixed: map of string
   role_policy_arns = {
     "alb-controller" = aws_iam_policy.alb_controller.arn
   }

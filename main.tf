@@ -13,7 +13,7 @@ provider "aws" {
 }
 
 # -------------------------------
-# VPC
+# VPC Module
 # -------------------------------
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
@@ -35,7 +35,7 @@ module "vpc" {
 }
 
 # -------------------------------
-# EKS Cluster
+# EKS Module
 # -------------------------------
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -46,7 +46,7 @@ module "eks" {
   subnet_ids      = module.vpc.private_subnets
   vpc_id          = module.vpc.vpc_id
 
-  enable_irsa = true  # important for ALB Controller
+  enable_irsa = true  # Required for ALB Controller
 
   eks_managed_node_groups = {
     default = {
@@ -64,25 +64,38 @@ module "eks" {
 }
 
 # -------------------------------
-# ECR repository for Docker images
+# ECR Repository for NGINX app
 # -------------------------------
 resource "aws_ecr_repository" "app" {
   name = "nginx-app"
-  image_scanning_configuration { 
-    scan_on_push = true 
+
+  image_scanning_configuration {
+    scan_on_push = true
   }
-  tags = { 
-    Environment = "dev" 
+
+  tags = {
+    Environment = "dev"
   }
 }
 
 # -------------------------------
-# S3 bucket (optional for your app)
+# S3 bucket (optional)
 # -------------------------------
 #resource "aws_s3_bucket" "app_bucket" {
 #  bucket = "kfc-bucket-for-henry-to-enjoy"
-#
+
 #  tags = {
 #    Environment = "dev"
 #  }
 #}
+
+# -------------------------------
+# EKS cluster data (for kubernetes provider)
+# -------------------------------
+data "aws_eks_cluster" "cluster" {
+  name = module.eks.cluster_id
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
