@@ -90,3 +90,6 @@ jobs:
           echo "Waiting for ALB to provision..."
           sleep 120
           kubectl get ingress nginx-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+
+          
