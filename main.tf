@@ -6,23 +6,11 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.20"
-    }
   }
 }
 
 provider "aws" {
   region = var.region
-}
-
-# Kubernetes provider configured via EKS module outputs
-provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  token                  = module.eks.cluster_auth_token
-  depends_on             = [module.eks]
 }
 
 # -----------------------------
@@ -43,10 +31,20 @@ module "vpc" {
   single_nat_gateway   = true
   enable_dns_hostnames = true
 
-  tags = {
+  # Tag subnets so ALB Controller can discover them
+  public_subnet_tags = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = "1"
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/internal-elb"           = "1"
+  }
+
+  # VPC-level tags (optional)
+  tags = {
+    Project = var.cluster_name
   }
 }
 
@@ -105,8 +103,4 @@ output "eks_cluster_name" {
 
 output "eks_cluster_endpoint" {
   value = module.eks.cluster_endpoint
-}
-
-output "eks_cluster_kubeconfig_token" {
-  value = module.eks.cluster_auth_token
 }
