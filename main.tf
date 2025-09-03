@@ -17,10 +17,12 @@ provider "aws" {
   region = var.region
 }
 
+# Kubernetes provider configured via EKS module outputs
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.cluster.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = module.eks.cluster_auth_token
+  depends_on             = [module.eks]
 }
 
 # -----------------------------
@@ -49,14 +51,14 @@ module "vpc" {
 }
 
 # -----------------------------
-# EKS
+# EKS Cluster
 # -----------------------------
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.31.2" # ✅ upgraded module
+  version = "~> 20.31.2"
 
   cluster_name    = var.cluster_name
-  cluster_version = "1.30" # ✅ upgraded to latest EKS version
+  cluster_version = "1.29"
 
   subnet_ids = module.vpc.private_subnets
   vpc_id     = module.vpc.vpc_id
@@ -71,6 +73,11 @@ module "eks" {
       instance_types = [var.node_instance_type]
     }
   }
+
+  tags = {
+    Environment = "dev"
+    Terraform   = "true"
+  }
 }
 
 # -----------------------------
@@ -83,15 +90,23 @@ resource "aws_ecr_repository" "app" {
   image_scanning_configuration {
     scan_on_push = true
   }
+
+  tags = {
+    Environment = "dev"
+  }
 }
 
 # -----------------------------
-# Data Sources for Kubernetes Provider
+# Optional: Outputs
 # -----------------------------
-data "aws_eks_cluster" "cluster" {
-  name = module.eks.cluster_name
+output "eks_cluster_name" {
+  value = module.eks.cluster_name
 }
 
-data "aws_eks_cluster_auth" "cluster" {
-  name = module.eks.cluster_name
+output "eks_cluster_endpoint" {
+  value = module.eks.cluster_endpoint
+}
+
+output "eks_cluster_kubeconfig_token" {
+  value = module.eks.cluster_auth_token
 }
