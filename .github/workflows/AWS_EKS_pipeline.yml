@@ -2,7 +2,7 @@ name: Deploy to AWS EKS
 
 on:
   push:
-    branches: ["**"]        # Any branch
+    branches: ["**"]
   pull_request:
     branches: ["**"]
   workflow_dispatch:
@@ -43,7 +43,6 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
-      # Export required Terraform outputs for later jobs
       - name: Export Terraform outputs
         run: terraform output -json > tf-outputs.json
 
@@ -94,6 +93,8 @@ jobs:
 
     env:
       IMAGE_URI: ${{ needs.build.outputs.image_uri }}
+      CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+      AWS_REGION: ${{ env.AWS_REGION }}
 
     steps:
       - name: Checkout Code
@@ -111,7 +112,7 @@ jobs:
         with:
           version: v1.29.0
 
-      - name: Setup Terraform (for reading outputs format)
+      - name: Setup Terraform (for reading outputs)
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.6
@@ -125,14 +126,14 @@ jobs:
         id: tfout
         run: |
           sudo apt-get update -y && sudo apt-get install -y jq
-          echo "ALB_ROLE_ARN=$(jq -r '.alb_controller_role_arn.value' tf-outputs.json)" >> $GITHUB_ENV
+          ALB_ROLE_ARN=$(jq -r '.alb_controller_role_arn.value' tf-outputs.json)
+          echo "ALB_ROLE_ARN=$ALB_ROLE_ARN" >> $GITHUB_ENV
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 
       - name: Wait for nodes Ready
         run: |
-          # Wait up to ~5 minutes for nodes to join and be Ready
           for i in {1..30}; do
             if kubectl get nodes 2>/dev/null | grep -q ' Ready '; then
               echo "Nodes are Ready"
@@ -143,12 +144,10 @@ jobs:
             sleep 10
           done
 
-      # --- Install AWS Load Balancer Controller (no Helm) ---
       - name: Download ALB Controller manifest
         run: |
           curl -L -o v2_7_1_full.yaml \
             https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.7.1/v2_7_1_full.yaml
-          # Replace placeholder cluster name in the manifest
           sed -i "s/your-cluster-name/${CLUSTER_NAME}/" v2_7_1_full.yaml
 
       - name: Apply ALB Controller manifest
@@ -156,8 +155,7 @@ jobs:
 
       - name: Annotate ALB Controller ServiceAccount with IRSA role
         run: |
-          kubectl annotate serviceaccount \
-            -n kube-system aws-load-balancer-controller \
+          kubectl annotate serviceaccount -n kube-system aws-load-balancer-controller \
             eks.amazonaws.com/role-arn=${ALB_ROLE_ARN} --overwrite
 
       - name: Restart & Wait for ALB Controller
@@ -165,8 +163,7 @@ jobs:
           kubectl -n kube-system rollout restart deployment aws-load-balancer-controller
           kubectl -n kube-system rollout status deployment aws-load-balancer-controller --timeout=300s
 
-      # --- Deploy app manifests ---
-      - name: Apply Deployment, Service, Ingress
+      - name: Apply Deployment, Service, Ingress from k8s/ folder
         run: |
           kubectl apply -f k8s/deployment.yml
           kubectl apply -f k8s/service.yml
@@ -181,7 +178,6 @@ jobs:
       - name: Get ALB Address
         id: alb
         run: |
-          # Wait up to ~10 minutes for Ingress to provision an ALB and get a hostname
           for i in {1..60}; do
             ENDPOINT=$(kubectl get ingress nginx-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
             if [ -n "$ENDPOINT" ] && [ "$ENDPOINT" != "<nil>" ]; then
@@ -197,7 +193,6 @@ jobs:
 
       - name: Test NGINX endpoint
         run: |
-          echo "Testing NGINX endpoint at: $alb_hostname"
           for i in {1..30}; do
             if curl -s --fail "http://$alb_hostname" >/dev/null; then
               echo "✅ NGINX is up and serving traffic!"

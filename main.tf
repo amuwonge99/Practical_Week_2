@@ -13,6 +13,16 @@ provider "aws" {
   region = var.region
 }
 
+data "aws_eks_cluster_auth" "this" {
+  name = module.eks.cluster_name
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.this.token
+}
+
 # -----------------------------
 # VPC
 # -----------------------------
@@ -62,6 +72,9 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
 
   enable_irsa = true
+
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = true
 
   eks_managed_node_groups = {
     default = {
